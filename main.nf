@@ -190,6 +190,35 @@ process p41_cluster_analysis_cd161 {
 }
 
 
+process p43_public_data_cd161 {
+    def id = "43_public_data_cd161"
+    container "https://github.com/icbi-lab/abdulrahman2021_paper/releases/download/containers-0.1.0/vanderburg_scanpy.sif"
+    cpus 4
+    publishDir "$RES_DIR/$id", mode: params.publishDirMode
+
+    input:
+        file 'notebook.Rmd' from Channel.fromPath("analyses/${id}.Rmd")
+        file 'smartseq2-data.tar.gz' from Channel.fromPath("https://github.com/icbi-lab/duurland2021_paper/releases/download/d0.1.0/smartseq2-datasets-zhang.tar.gz")
+
+    
+    output:
+        file "${id}.html" into public_data_cd161_html 
+    """
+    tar xzf smartseq2-data.tar.gz
+
+    execute_notebook.sh ${id} ${task.cpus} notebook.Rmd " 
+       -r crc_counts CRC/resultCOUNT.txt 
+       -r crc_patient_info CRC/patient_data.tsv 
+       -r hcc_counts HCC/resultCOUNT.txt 
+       -r hcc_patient_info HCC/patient_table.tsv 
+       -r nsclc_counts NSCLC/resultCOUNT.txt 
+       -r nsclc_patient_info NSCLC/patient_table.tsv 
+    "
+    
+    """
+}
+
+
 process deploy {
     publishDir "${params.deployDir}", mode: "copy"
     executor "local"
@@ -202,7 +231,8 @@ process deploy {
             annotate_cell_types_html,
             prepare_adata_t_nk_html,
             cluster_analysis_cd161_html,
-            cluster_analysis_cd161_zip
+            cluster_analysis_cd161_zip,
+            public_data_cd161_html
         ).collect()
 
     output:
