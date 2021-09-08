@@ -19,6 +19,10 @@ structure:
 data/cellranger/{SAMPLE}_GEX/outs/raw_feature_bc_matrix.h5
 ```
 
+Gene expression data from three publicly available Smart-seq2 datasets
+are available [on the release page](https://github.com/icbi-lab/duurland2021_paper/releases/tag/d0.1.0) 
+and will be downloaded automatically by the pipeline. 
+
 ### 2. Run the pipeline
 
 Prerequisites:
