@@ -5,6 +5,10 @@
  * [Normalize data](03_normalize.html)
  * [Annotate cell-types](04_annotate_cell_types.html)
  * [Annotate NK/T cells](05_prepare_adata_nk_t.html)
+ * **CD161**
+    * [Cluster analysis](41_cluster_analysis_cd161.html)
+      * [figures](41_cluster_analysis_cd161.zip)
+    * [Analysis of publicly available Smartseq2 datasets](43_public_data_cd161.html)
 
 ## Source code
 A reproducible Nextflow pipeline generating
