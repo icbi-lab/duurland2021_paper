@@ -155,7 +155,7 @@ process p05_prepare_adata_t_nk {
         file 'input_adata.h5ad' from annotate_cell_types_adata
 
     output:
-        file "adata.h5ad" into prepare_adata_t_nk, prepare_adata_t_nk_3, prepare_adata_t_nk_6
+        file "adata.h5ad" into prepare_adata_t_nk
         file "${id}.html" into prepare_adata_t_nk_html
         file "adata_obs.tsv" into prepare_adata_t_nk_obs,
            prepare_adata_t_nk_obs_2
@@ -166,121 +166,28 @@ process p05_prepare_adata_t_nk {
     """
 }
 
-process p20_prepare_cluster_de_analysis {
-    def id = "20_prepare_cluster_de_analysis"
-    container "https://github.com/icbi-lab/abdulrahman2021_paper/releases/download/containers-0.1.0/vanderburg_de_results.v2.sif"
-    publishDir "$RES_DIR/$id", mode: params.publishDirMode
-
-    input:
-        file 'notebook.Rmd' from Channel.fromPath("analyses/${id}.Rmd")
-        file 'obs.tsv' from prepare_adata_t_nk_obs_2
-        file 'counts.tsv' from prepare_adata_t_nk_norm_counts
-
-    output:
-        file "*.rda" into prepare_cluster_de_analysis_rda
-        file "${id}.html" into prepare_cluster_de_analysis_html
-
-    """
-    reportsrender notebook.Rmd \
-        ${id}.html \
-        --cpus=${task.cpus} \
-        --params="input_obs=obs.tsv \
-                  input_counts=counts.tsv \
-                  output_dir='.'"
-    """
-}
-
-process p21_run_de_analysis_clusters {
-    def id = "21_run_de_analysis_clusters"
-    container "https://github.com/icbi-lab/abdulrahman2021_paper/releases/download/containers-0.1.0/vanderburg_edger.sif"
-    publishDir "$RES_DIR/$id", mode: params.publishDirMode
-
-    cpus 6
-
-    input:
-        file input_data from prepare_cluster_de_analysis_rda.flatten()
-
-    output:
-        file "${input_data}.res.tsv" into run_de_analysis_clusters_results
-        file "${input_data}.res.xlsx" into run_de_analysis_clusters_results_xlsx
-
-    """
-    export OPENBLAS_NUM_THREADS=${task.cpus} OMP_NUM_THREADS=${task.cpus} \
-            MKL_NUM_THREADS=${task.cpus} OMP_NUM_cpus=${task.cpus} \
-            MKL_NUM_cpus=${task.cpus} OPENBLAS_NUM_cpus=${task.cpus} \
-            MKL_THREADING_LAYER=GNU
-    run_de.R ${input_data} ${input_data}.res.tsv \
-        --cpus=${task.cpus} \
-        --excel=${input_data}.res.xlsx
-    """
-}
-
-process p22_cluster_de_analysis {
-    def id = "22_cluster_de_analysis"
-    container "https://github.com/icbi-lab/abdulrahman2021_paper/releases/download/containers-0.1.0/vanderburg_de_results.v2.sif"
-    publishDir "$RES_DIR/$id", mode: params.publishDirMode
-
-    input:
-        file 'notebook.Rmd' from Channel.fromPath("analyses/${id}.Rmd")
-        file "*" from run_de_analysis_clusters_results_xlsx.collect()
-        file "*" from run_de_analysis_clusters_results.collect()
-
-    output:
-        file "${id}.html" into cluster_de_analysis_html
-        file "*.zip" into cluster_de_analysis_zip
-
-    """
-    # use python, zip not available in container
-    python -m zipfile -c ${id}.zip *.xlsx
-    reportsrender notebook.Rmd \
-        ${id}.html \
-        --cpus=${task.cpus} \
-        --params="de_dir='.'"
-    """
-}
-
-process p60_tcr_analysis {
-    def id = "60_tcr_analysis"
-    container "https://github.com/icbi-lab/abdulrahman2021_paper/releases/download/containers-0.1.0/vanderburg_scanpy.sif"
-    cpus 42
-    publishDir "$RES_DIR/$id", mode: params.publishDirMode
-
-    input:
-        file 'notebook.Rmd' from Channel.fromPath("analyses/${id}.Rmd")
-        file 'input_adata.h5ad' from prepare_adata_t_nk_3
-
-    output:
-        file "${id}.html" into tcr_analysis_html
-        file "${id}.zip" into tcr_analysis_tsv
-
-    """
-    execute_notebook.sh ${id} ${task.cpus} notebook.Rmd \\
-        "-r input_file input_adata.h5ad -r n_cpus ${task.cpus} -r output_dir . -r tcr_dir cellranger"
-    python -m zipfile -c ${id}.zip *.tsv
-    """
-}
-
-process p61_cluster_analysis {
-    def id = "61_cluster_analysis"
+process p41_cluster_analysis_cd161 {
+    def id = "41_cluster_analysis_cd161"
     container "https://github.com/icbi-lab/abdulrahman2021_paper/releases/download/containers-0.1.0/vanderburg_scanpy.sif"
     cpus 1
     publishDir "$RES_DIR/$id", mode: params.publishDirMode
 
     input:
         file 'notebook.Rmd' from Channel.fromPath("analyses/${id}.Rmd")
-        file 'input_adata.h5ad' from prepare_adata_t_nk_6
+        file 'input_adata.h5ad' from prepare_adata_t_nk 
 
     output:
-        file "${id}.zip" into cluster_analysis_figures
-        file "${id}.html" into cluster_analysis_html
+        file "${id}.html" into cluster_analysis_cd161_html
+        file "${id}.zip" into cluster_analysis_cd161_zip
+
     """
     execute_notebook.sh ${id} ${task.cpus} notebook.Rmd \\
-        "-r input_file input_adata.h5ad"
-    python -m zipfile -c ${id}.zip figures/*.pdf
+       "-r input_file input_adata.h5ad"
+
+    python -m zipfile -c ${id}.zip figures/*.pdf    
     """
+
 }
-
-
 
 
 process deploy {
@@ -294,12 +201,8 @@ process deploy {
             correct_data_html,
             annotate_cell_types_html,
             prepare_adata_t_nk_html,
-            cluster_de_analysis_html,
-            cluster_de_analysis_zip,
-            tcr_analysis_html,
-            tcr_analysis_tsv,
-            cluster_analysis_html,
-            cluster_analysis_figures,
+            cluster_analysis_cd161_html,
+            cluster_analysis_cd161_zip
         ).collect()
 
     output:

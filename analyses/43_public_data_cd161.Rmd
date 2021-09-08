@@ -1,0 +1,230 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.11.2
+  kernelspec:
+    display_name: Python [conda env:vanderburg_oropharyngeal_cancer-ca9006a72cd4c32ca83708ebea1b2975]
+    language: python
+    name: conda-env-vanderburg_oropharyngeal_cancer-ca9006a72cd4c32ca83708ebea1b2975-py
+---
+
+```{python include=FALSE}
+import scanpy as sc
+import pandas as pd
+import os
+import seaborn as sns
+import matplotlib.pyplot as plt
+from matplotlib import colors
+import numpy as np
+```
+
+```{python tags=c("parameters")}
+crc_counts = "../data/external/Zhang_Zhang_2019_CRC/smartseq2_pipeline/resultCOUNT.txt"
+nsclc_counts = (
+    "../data/external/Guo_Zhang_2018_NSCLC/smartseq2_pipeline/resultCOUNT.txt"
+)
+hcc_counts = "../data/external/Zheng_Zhang_2017_HCC/smartseq2_pipeline/resultCOUNT.txt"
+crc_patient_info = "../data/external/Zhang_Zhang_2019_CRC/scripts/patient_data.tsv"
+nsclc_patient_info = "../data/external/Guo_Zhang_2018_NSCLC/scripts/patient_table.tsv"
+hcc_patient_info = "../data/external/Zheng_Zhang_2017_HCC//scripts/patient_table.tsv"
+```
+
+# CD161 expression in external datasets
+
+To make sure that the distribution of CD161 expression across various subtypes of CD4+ T-cells is 
+not arising from issues of the 10x single-cell datasets, we check three publicly available
+Smart-seq2 datasets (CRC, NSCLC and HCC) in this notebook. 
+
+* CRC: https://www.nature.com/articles/s41597-019-0131-5#Sec36
+* HCC: http://dx.doi.org/10.1016/j.cell.2017.05.035
+* NSCLC: http://dx.doi.org/10.1038/s41591-018-0045-3
+ 
+Raw data have been obtained from EGA under controlled access and processed
+ using nf-core [smartseq2 pipeline](https://github.com/nf-core/smartseq2/). 
+
+```{python include=FALSE}
+counts = {
+    "crc": pd.read_csv(crc_counts, sep="\t", index_col=0),
+    "nsclc": pd.read_csv(nsclc_counts, sep="\t", index_col=0),
+    "hcc": pd.read_csv(hcc_counts, sep="\t", index_col=0),
+}
+```
+
+```{python include=FALSE}
+patient_info = {
+    "crc": pd.read_csv(
+        crc_patient_info,
+        sep="\t",
+        index_col="Cell name",
+    ).rename({"Cell type": "sampleType"}, axis="columns"),
+    "nsclc": pd.read_csv(nsclc_patient_info, sep="\t", index_col="UniqueCell_ID"),
+    "hcc": pd.read_csv(hcc_patient_info, sep="\t", index_col="UniqueCell_ID"),
+}
+```
+
+```{python include=FALSE}
+for counts_df in counts.values():
+    counts_df.columns = ["_".join(x.split("_")[2:]) for x in counts_df.columns]
+```
+
+```{python include=FALSE}
+for counts_df in counts.values():
+    counts_df.columns = counts_df.columns.str.replace("ZZM_", "")
+```
+
+```{python include=FALSE}
+patient_info["crc"].index = patient_info["crc"].index.str.replace("P0701", "0701")
+```
+
+```{python include=FALSE}
+adatas = {}
+for key in ["crc", "nsclc", "hcc"]:
+    counts_df = counts[key]
+    patient_df = patient_info[key]
+    cell_ids = list(set(counts_df.columns) & set(patient_df.index.values))
+    adata = sc.AnnData(X=counts_df.loc[:, cell_ids].T, obs=patient_df.loc[cell_ids, :])
+    adatas[key] = adata
+```
+
+```{python include=FALSE}
+for key, adata in adatas.items():
+    print(key, adata.shape)
+```
+
+```{python include=FALSE}
+# os.makedirs("./tmp", exist_ok=True)
+# for key, adata in adatas.items():
+#     adata.write_h5ad(f"./tmp/adata_{key}.h5ad", compression='lzf')
+```
+
+```{python include=FALSE}
+for key, adata in adatas.items():
+    adata.var["mito"] = adata.var_names.str.startswith("MT-")
+    sc.pp.calculate_qc_metrics(adata, qc_vars=("mito",), inplace=True)
+    ax = sns.distplot(adata.obs["pct_counts_mito"].dropna())
+    ax.set_title(key)
+    plt.show()
+    ax = sns.distplot(adata.obs["n_genes_by_counts"].dropna())
+    ax.set_title(key)
+    plt.show()
+```
+
+```{python include=FALSE}
+MIN_CELLS = 10
+MAX_MITO = 16
+MIN_GENES = 2000
+MAX_GENES = 8000
+```
+
+```{python include=FALSE}
+for key, adata in adatas.items():
+    sc.pp.filter_genes(adata, min_cells=MIN_CELLS)
+    sc.pp.filter_cells(adata, min_genes=MIN_GENES)
+    sc.pp.filter_cells(adata, max_genes=MAX_GENES)
+    adatas[key] = adata[adata.obs["pct_counts_mito"] < MAX_MITO, :]
+    print(key, adatas[key].shape)
+```
+
+### Cell-types in the datasets
+*  PTC, CD8+ cytotoxic T cells from peripheral blood;
+* TTC, CD8+ cytotoxic T cells from tumour tissue; 
+* NTC, CD8+ cytotoxic T cells from adjacent normal tissue
+* PTH, CD4+CD25- cells from peripheral blood
+* TTH, CD4+CD25- cells from tumour tissue; 
+* NTH, CD4+CD25- cells from adjacent normal tissue;
+* PTR, CD4+CD25hi cells from peripheral blood; 
+* TTR, CD4+CD25hi cells from tumour tissue;
+* NTR, CD4+CD25hi cells from adjacent normal tissue;
+* PTY, CD4+CD25int cells from peripheral blood; 
+* TTY, CD4+CD25int cells from tumour tissue;
+* NTY, CD4+CD25int cells from adjacent normal tissue;
+* PP7, CD4+ T cells from peripheral blood;
+* TP7, CD4+ T cells from tumour tissue; 
+* NP7, CD4+ T cells from adjacent normal tissue.
+
+We are only interested in cells from tumor and adjacent normal tissue. 
+
+```{python include=FALSE}
+# adatas_bk = {k: adata.copy() for k, adata in adatas.items()}
+```
+
+```{python include=FALSE}
+# adatas = {k: adata.copy() for k, adata in adatas_bk.items()}
+```
+
+```{python include=FALSE}
+for key, adata in adatas.items():
+    ct_map = {"C": "CD8", "H": "CD4", "R": "Treg", "Y": "CD4", "7": "CD4"}
+    adata.obs["cell_type"] = [ct_map[x[2]] for x in adata.obs["sampleType"]]
+    adatas[key] = adata[
+        adata.obs["sampleType"].str.startswith("T")
+        | adata.obs["sampleType"].str.startswith("N"),
+        :,
+    ].copy()
+```
+
+```{python include=FALSE}
+for key, adata in adatas.items():
+    print(key)
+    sc.pp.normalize_total(adata, target_sum=1000)
+    sc.pp.log1p(adata)
+    sc.pp.highly_variable_genes(adata, n_top_genes=3000, flavor="cell_ranger")
+    adata.raw = adata
+    sc.pp.combat(adata, key="Patient")
+```
+
+```{python include=FALSE}
+for key, adata in adatas.items():
+    sc.tl.pca(adata, svd_solver="arpack")
+    sc.pp.neighbors(adata, n_neighbors=10, n_pcs=40)
+    sc.tl.umap(adata)
+```
+
+```{python include=FALSE}
+for key, adata in adatas.items():
+    print(key)
+    sc.pl.umap(adata, color=["Patient", "sampleType", "cell_type"])
+```
+
+```{python}
+colors2 = plt.cm.Reds(np.linspace(0, 1, 128))
+colors3 = plt.cm.Greys_r(np.linspace(0.7,0.8,20))
+colorsComb = np.vstack([colors3, colors2])
+mymap = colors.LinearSegmentedColormap.from_list('my_colormap', colorsComb)
+```
+
+```{python include=FALSE}
+def make_plots(key, **kwargs):
+    adata = adatas[key]
+    sc.pl.umap(
+        adata, color=["cell_type", "CD8A", "CD4", "FOXP3", "KLRB1"], ncols=3, **kwargs, cmap=mymap
+    )
+```
+
+## Results
+The following plots show the UMAP embedding for the different cancer types. 
+The cell-type, cell-type markers and KLRB1 are highlighted. 
+### NSCLC
+
+```{python tags=c("hide_input")}
+make_plots("nsclc", size=40)
+```
+
+### CRC
+
+```{python tags=c("hide_input")}
+make_plots("crc",  size=40)
+```
+
+### HCC
+
+```{python tags=c("hide_input")}
+make_plots("hcc", size=60)
+```
+
+### Conclusion
+For all three datasets, we find that KLRB1 expression is not confined to a certain subset of CD4+ T-cells. 
