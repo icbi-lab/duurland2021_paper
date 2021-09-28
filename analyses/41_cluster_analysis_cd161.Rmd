@@ -14,6 +14,9 @@ jupyter:
 
 ```{python include=FALSE}
 import scanpy as sc
+import matplotlib.pyplot as plt
+from matplotlib import colors
+import numpy as np
 ```
 
 ```{python tags=c("parameters")}
@@ -30,6 +33,17 @@ adata_t = adata[adata.obs["cell_type"] != "NK cell", :]
 
 ```{python}
 sc.pl.umap(adata_t, color="cluster", save="_klrb1.pdf")
+```
+
+```{python}
+colors2 = plt.cm.Reds(np.linspace(0, 1, 128))
+colors3 = plt.cm.Greys_r(np.linspace(0.7,0.8,20))
+colorsComb = np.vstack([colors3, colors2])
+mymap = colors.LinearSegmentedColormap.from_list('my_colormap', colorsComb)
+```
+
+```{python}
+sc.pl.umap(adata_t, color="KLRB1", save="_klrb1_expr.pdf", cmap=mymap)
 ```
 
 ```{python tags=c("hide_input")}
